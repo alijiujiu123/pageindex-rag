@@ -35,8 +35,8 @@ def get_rag_pipeline():
     tree_searcher = TreeSearcher(cfg)
     node_extractor = NodeContentExtractor(store)
 
-    description_searcher = DescriptionSearcher(store)
-    metadata_searcher = MetadataSearcher(store)
+    description_searcher = DescriptionSearcher(store, cfg)
+    metadata_searcher = MetadataSearcher(store, cfg)
     semantic_searcher = SemanticSearcher(cfg)
     search_router = DocumentSearchRouter(
         description_searcher=description_searcher,

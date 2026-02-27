@@ -90,15 +90,12 @@ def test_deploy_script_contains_required_commands():
     deploy = Path("scripts/deploy.sh")
     content = deploy.read_text()
 
-    required_commands = [
-        "rsync",
-        "docker-compose",
-        "curl",
-        "health",
-    ]
-
-    for command in required_commands:
-        assert command in content, f"deploy.sh 缺少命令: {command}"
+    assert "rsync" in content, "deploy.sh 缺少命令: rsync"
+    assert "curl" in content, "deploy.sh 缺少命令: curl"
+    assert "health" in content, "deploy.sh 缺少关键字: health"
+    assert (
+        "docker compose" in content or "docker-compose" in content
+    ), "deploy.sh 缺少 docker compose/docker-compose 命令"
 
 
 def test_deploy_script_has_correct_server():
