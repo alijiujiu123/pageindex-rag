@@ -42,7 +42,7 @@ rsync -avz --delete \
     --exclude='results' \
     --exclude='financebench_pdfs' \
     --exclude='.idea' \
-    --exclude='uv.lock' \
+    --exclude='.venv' \
     ./ "$SERVER:$PROJECT_DIR/"
 
 # 2. 在服务器上创建 .env 文件（如果不存在）
@@ -62,24 +62,15 @@ ENDSSH
 
 # 3. 停止旧容器
 echo -e "${GREEN}[3/6] 停止旧容器...${NC}"
-ssh "$SERVER" << 'ENDSSH'
-cd /root/pageindex-rag
-docker-compose down || true
-ENDSSH
+ssh "$SERVER" "bash -c 'cd /root/pageindex-rag && docker compose down || true'"
 
 # 4. 构建新镜像
 echo -e "${GREEN}[4/6] 构建 Docker 镜像...${NC}"
-ssh "$SERVER" << 'ENDSSH'
-cd /root/pageindex-rag
-docker-compose build --no-cache
-ENDSSH
+ssh "$SERVER" "bash -c 'cd /root/pageindex-rag && docker compose build --no-cache'"
 
 # 5. 启动新容器
 echo -e "${GREEN}[5/6] 启动容器...${NC}"
-ssh "$SERVER" << 'ENDSSH'
-cd /root/pageindex-rag
-docker-compose up -d
-ENDSSH
+ssh "$SERVER" "bash -c 'cd /root/pageindex-rag && docker compose up -d'"
 
 # 6. 等待健康检查
 echo -e "${GREEN}[6/6] 等待服务启动...${NC}"
@@ -95,7 +86,7 @@ else
 fi
 
 # 测试 QA 端点
-echo -e "${GREEN}测试 QA 端点...${NC}
+echo -e "${GREEN}测试 QA 端点...${NC}"
 HEALTH_CHECK=$(curl -s -X POST http://43.167.189.165/qa \
     -H "Content-Type: application/json" \
     -d '{"query": "test"}' \
@@ -116,9 +107,9 @@ echo "服务器: $SERVER"
 echo "项目目录: $PROJECT_DIR"
 echo ""
 echo "常用命令:"
-echo "  查看日志: ssh $SERVER 'cd $PROJECT_DIR && docker-compose logs -f api'"
-echo "  重启服务: ssh $SERVER 'cd $PROJECT_DIR && docker-compose restart api'"
-echo "  停止服务: ssh $SERVER 'cd $PROJECT_DIR && docker-compose down'"
+echo "  查看日志: ssh $SERVER 'cd $PROJECT_DIR && docker compose logs -f api'"
+echo "  重启服务: ssh $SERVER 'cd $PROJECT_DIR && docker compose restart api'"
+echo "  停止服务: ssh $SERVER 'cd $PROJECT_DIR && docker compose down'"
 echo "  进入容器: ssh $SERVER 'docker exec -it pageindex-api bash'"
 echo ""
 echo "API 端点:"

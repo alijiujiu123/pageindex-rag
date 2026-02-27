@@ -10,11 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制 pyproject.toml 和 uv.lock
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
+COPY uv.lock ./
 
 # 安装 uv 并安装依赖
 RUN pip install --no-cache-dir uv && \
-    uv sync --frozen --no-dev
+    uv sync --no-dev
 
 # 复制应用代码
 COPY pageindex/ ./pageindex/

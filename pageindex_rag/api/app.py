@@ -8,3 +8,9 @@ app = FastAPI(title="PageIndex RAG API", version="0.1.0")
 app.include_router(documents.router, prefix="/documents", tags=["documents"])
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(qa.router, prefix="/qa", tags=["qa"])
+
+
+@app.get("/health")
+async def health_check():
+    """健康检查端点。"""
+    return {"status": "healthy", "service": "pageindex-rag"}
