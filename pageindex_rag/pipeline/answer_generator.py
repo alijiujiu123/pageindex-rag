@@ -12,9 +12,20 @@ class AnswerGenerator:
         复用 pageindex/utils.py 中的 ChatGPT_API_async。
         """
 
+        # 兼容旧调用：dict[node_id -> content]
+        if isinstance(nodes_content, dict):
+            normalized_nodes = [
+                {"node_id": node_id, "content": content, "page_range": ""}
+                for node_id, content in nodes_content.items()
+            ]
+        else:
+            normalized_nodes = nodes_content or []
+
         # 构建上下文
         context_parts = []
-        for node in nodes_content:
+        for node in normalized_nodes:
+            if not isinstance(node, dict):
+                continue
             content = node.get("content", "")
             node_id = node.get("node_id", "")
             page_range = node.get("page_range", "")
@@ -57,8 +68,7 @@ ANSWERING GUIDELINES FOR FINANCIAL REPORTS:
 
 Please provide your answer:"""
 
-        messages = [{"role": "user", "content": prompt}]
-
         model = getattr(self.config, "model", "gpt-4o-mini")
-        answer = await ChatGPT_API_async(messages, model=model)
+        api_key = getattr(self.config, "openai_api_key", "")
+        answer = await ChatGPT_API_async(model, prompt, api_key)
         return answer

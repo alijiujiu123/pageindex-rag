@@ -30,8 +30,8 @@ def get_search_router():
     Session = sessionmaker(bind=engine)
     store = DocumentStore(Session)
 
-    description_searcher = DescriptionSearcher(store)
-    metadata_searcher = MetadataSearcher(store)
+    description_searcher = DescriptionSearcher(store, cfg)
+    metadata_searcher = MetadataSearcher(store, cfg)
     semantic_searcher = SemanticSearcher(cfg)
 
     return DocumentSearchRouter(

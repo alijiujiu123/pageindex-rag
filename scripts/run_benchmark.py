@@ -24,10 +24,12 @@ from pathlib import Path
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from pageindex_rag.benchmark.evaluator import AnswerEquivalenceJudge, BenchmarkEvaluator
 from pageindex_rag.benchmark.financebench import FinanceBenchDataset
 from pageindex_rag.config import get_config
-from pageindex_rag.ingestion.ingest import DocumentIngestion
 from pageindex_rag.pipeline.rag_pipeline import RAGPipeline
 from pageindex_rag.retrieval.node_extractor import NodeContentExtractor
 from pageindex_rag.retrieval.tree_search import TreeSearcher
@@ -35,6 +37,7 @@ from pageindex_rag.search.metadata_search import MetadataSearcher
 from pageindex_rag.search.router import DocumentSearchRouter
 from pageindex_rag.search.semantic_search import SemanticSearcher
 from pageindex_rag.storage.document_store import DocumentStore
+from pageindex_rag.storage.models import Base
 
 
 class EnhancedBenchmarkEvaluator(BenchmarkEvaluator):
@@ -151,13 +154,14 @@ async def main():
 
     # 初始化
     config = get_config()
-    store = DocumentStore(config=config)
+    engine = create_engine(config.database_url)
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    store = DocumentStore(SessionLocal)
 
     # 搜索器
     semantic_searcher = SemanticSearcher(config=config)
-    semantic_searcher.load_index()
-
-    metadata_searcher = MetadataSearcher(store=store)
+    metadata_searcher = MetadataSearcher(document_store=store, config=config)
 
     # 路由器（使用优化后的权重）
     router = DocumentSearchRouter(
@@ -171,7 +175,7 @@ async def main():
     tree_searcher = TreeSearcher(config)
 
     # 节点提取器
-    node_extractor = NodeContentExtractor(store=store)
+    node_extractor = NodeContentExtractor(store)
 
     # Pipeline
     pipeline = RAGPipeline(

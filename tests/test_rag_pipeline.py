@@ -137,3 +137,77 @@ async def test_no_relevant_doc(mock_document_store, mock_tree_searcher, mock_nod
     assert "sources" in result
     assert result["sources"] == []
     assert "未找到" in result["answer"] or "no" in result["answer"].lower()
+
+
+@pytest.mark.asyncio
+async def test_single_doc_pipeline_handles_tree_search_dict_and_extractor_map():
+    """单文档模式兼容 tree_search dict 输出与 extractor map 输出。"""
+    from pageindex_rag.pipeline.rag_pipeline import RAGPipeline
+
+    document_store = MagicMock()
+    document_store.get.return_value = {
+        "doc_id": "pi-test-123",
+        "tree": {
+            "title": "Doc",
+            "node_id": "0000",
+            "start_index": 1,
+            "end_index": 2,
+            "nodes": [
+                {"node_id": "0001", "title": "S1", "start_index": 1, "end_index": 1, "nodes": []},
+                {"node_id": "0002", "title": "S2", "start_index": 2, "end_index": 2, "nodes": []},
+            ],
+        },
+    }
+    tree_searcher = MagicMock()
+    tree_searcher.search = AsyncMock(return_value={"thinking": "...", "node_list": ["0001", "0002"]})
+    node_extractor = MagicMock()
+    node_extractor.extract.return_value = {"0001": "text-1", "0002": "text-2"}
+
+    with patch("pageindex_rag.pipeline.answer_generator.ChatGPT_API_async", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = "answer"
+        pipeline = RAGPipeline(document_store, tree_searcher, node_extractor)
+        result = await pipeline.query("Q", doc_id="pi-test-123")
+
+    assert result["answer"] == "answer"
+    assert len(result["sources"]) == 2
+    assert result["sources"][0]["node_id"] == "0001"
+    assert result["sources"][0]["page_range"] == "1-1"
+    assert result["sources"][1]["node_id"] == "0002"
+    assert result["sources"][1]["page_range"] == "2-2"
+
+
+@pytest.mark.asyncio
+async def test_multi_doc_pipeline_handles_router_doc_id_list():
+    """多文档模式兼容 search_router 返回 list[str]。"""
+    from pageindex_rag.pipeline.rag_pipeline import RAGPipeline
+
+    document_store = MagicMock()
+    document_store.get.side_effect = lambda doc_id: {
+        "doc_id": doc_id,
+        "tree": {
+            "title": "Doc",
+            "node_id": "0000",
+            "start_index": 1,
+            "end_index": 1,
+            "nodes": [{"node_id": "0001", "title": "S1", "start_index": 1, "end_index": 1, "nodes": []}],
+        },
+    }
+    tree_searcher = MagicMock()
+    tree_searcher.search = AsyncMock(return_value={"thinking": "...", "node_list": ["0001"]})
+    node_extractor = MagicMock()
+    node_extractor.extract.return_value = {"0001": "text"}
+    search_router = MagicMock()
+    search_router.search = AsyncMock(return_value=["pi-test-123", "pi-test-456"])
+
+    with patch("pageindex_rag.pipeline.answer_generator.ChatGPT_API_async", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = "answer"
+        pipeline = RAGPipeline(
+            document_store=document_store,
+            tree_searcher=tree_searcher,
+            node_extractor=node_extractor,
+            search_router=search_router,
+        )
+        result = await pipeline.query("Q")
+
+    assert result["answer"] == "answer"
+    assert [s["doc_id"] for s in result["sources"]] == ["pi-test-123", "pi-test-456"]
