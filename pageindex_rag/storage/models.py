@@ -20,3 +20,7 @@ class Document(Base):
     tree_json = Column(Text, nullable=False)
     pdf_path = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    doc_description = Column(Text, nullable=True)
+    company = Column(String(255), nullable=True)
+    fiscal_year = Column(String(10), nullable=True)
+    filing_type = Column(String(50), nullable=True)
