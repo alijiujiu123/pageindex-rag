@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: pageindex-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pageindex_rag
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # FastAPI 应用
+  api:
+    build: .
+    container_name: pageindex-api
+    environment:
+      CHATGPT_API_KEY: ${CHATGPT_API_KEY}
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/pageindex_rag
+      CHROMA_PERSIST_DIR: ./chroma_data
+    volumes:
+      - chroma_data:/app/chroma_data
+      - results_data:/app/results
+      - financebench_pdfs:/app/financebench_pdfs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  chroma_data:
+    driver: local
+  results_data:
+    driver: local
+  financebench_pdfs:
+    driver: local
