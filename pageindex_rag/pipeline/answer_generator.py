@@ -22,14 +22,40 @@ class AnswerGenerator:
 
         context = "\n\n".join(context_parts)
 
-        prompt = f"""请根据以下文档内容回答问题。
+        # 针对财报场景优化的 prompt
+        prompt = f"""You are analyzing a SEC financial report (10-K or 10-Q) to answer a user's question. Based on the provided document excerpts, give a precise and accurate answer.
 
-文档内容：
+DOCUMENT EXCERPTS:
 {context}
 
-问题：{query}
+USER QUESTION: {query}
 
-请基于文档内容给出准确、详细的回答。如果文档内容不足以回答问题，请说明。"""
+ANSWERING GUIDELINES FOR FINANCIAL REPORTS:
+1. NUMERICAL PRECISION:
+   - Report numbers exactly as stated in the document (preserve units, decimals, scale)
+   - Include currency symbols (e.g., $1.5 million, not 1.5)
+   - Maintain percentage format (e.g., 15.3%, not 0.153)
+   - Preserve scale indicators (thousands, millions, billions)
+
+2. CONTEXTUAL ACCURACY:
+   - Specify the fiscal year or reporting period for all data
+   - Mention if numbers are year-over-year comparisons
+   - Clarify if data is from consolidated vs. standalone statements
+
+3. SOURCE ATTRIBUTION:
+   - Reference the specific document section (e.g., "according to the Consolidated Balance Sheet")
+   - Include page numbers when available
+
+4. HANDLING AMBIGUITY:
+   - If the document doesn't contain the answer, clearly state: "The provided documents do not contain information to answer this question."
+   - If multiple conflicting figures exist, report all with their sources
+
+5. FORMAT:
+   - Be concise but complete
+   - Use bullet points for multi-part answers
+   - Highlight key numerical values
+
+Please provide your answer:"""
 
         messages = [{"role": "user", "content": prompt}]
 
