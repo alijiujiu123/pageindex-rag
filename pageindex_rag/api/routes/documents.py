@@ -41,6 +41,15 @@ def get_ingestion():
     return DocumentIngestion(store, searcher, cfg)
 
 
+def get_tree_searcher():
+    """Default tree searcher dependency. Override in tests via app.dependency_overrides."""
+    from pageindex_rag.retrieval.tree_search import TreeSearcher
+    from pageindex_rag.config import get_config
+
+    cfg = get_config()
+    return TreeSearcher(cfg)
+
+
 # ---------- Pydantic schemas ----------
 
 class MetadataUpdateRequest(BaseModel):
@@ -48,6 +57,10 @@ class MetadataUpdateRequest(BaseModel):
     company: Optional[str] = None
     fiscal_year: Optional[str] = None
     filing_type: Optional[str] = None
+
+
+class QueryRequest(BaseModel):
+    query: str
 
 
 # ---------- Endpoints ----------
@@ -145,3 +158,39 @@ def update_metadata(
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
     return {"doc_id": doc_id, "updated": True}
+
+
+@router.post("/{doc_id}/search")
+async def search_document_tree(
+    doc_id: str,
+    request: QueryRequest,
+    store=Depends(get_document_store),
+    tree_searcher=Depends(get_tree_searcher),
+):
+    """在单个文档的树结构中搜索相关节点。"""
+    doc = store.get(doc_id)
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+    tree = doc.get("tree_json") or doc.get("tree")
+    result = await tree_searcher.search(request.query, tree)
+
+    node_ids = result.get("node_list", [])
+
+    # 从树结构中提取节点信息
+    nodes = []
+    if node_ids:
+        from pageindex.utils import get_nodes
+        all_nodes = get_nodes(tree)
+        node_map = {n["node_id"]: n for n in all_nodes}
+
+        for nid in node_ids:
+            if nid in node_map:
+                node = node_map[nid]
+                nodes.append({
+                    "node_id": nid,
+                    "title": node.get("title", ""),
+                    "summary": node.get("summary"),
+                })
+
+    return {"doc_id": doc_id, "nodes": nodes}
