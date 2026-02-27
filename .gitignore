@@ -1,0 +1,11 @@
+__pycache__/
+*.egg-info/
+dist/
+build/
+.env
+*.pyc
+chroma_data/
+test.db
+logs/
+results/
+.pytest_cache/
