@@ -62,7 +62,7 @@ async def test_route_to_description():
 
 @pytest.mark.asyncio
 async def test_combined_results():
-    """strategy='combined' 合并三个搜索器结果，按出现次数降序排列。"""
+    """strategy='combined' 使用加权评分合并三个搜索器结果。"""
     description_searcher = MagicMock()
     description_searcher.search = AsyncMock(return_value=["pi-001", "pi-002"])
 
@@ -81,14 +81,43 @@ async def test_combined_results():
 
     result = await router.search("revenue growth analysis")
 
-    # pi-001: description + semantic = 2次
-    # pi-002: description + metadata = 2次
-    # pi-003: metadata + semantic = 2次
-    # 三者出现次数相同，按首次出现顺序排列
+    # 使用默认权重：semantic=2.0, metadata=1.5, description=1.0
+    # pi-001: description(1.0) + semantic(2.0) = 3.0
+    # pi-002: description(1.0) + metadata(1.5) = 2.5
+    # pi-003: metadata(1.5) + semantic(2.0) = 3.5
     assert len(result) == 3
-    # 出现2次的都在前面
     assert set(result) == {"pi-001", "pi-002", "pi-003"}
-    # 按首次出现顺序：pi-001 首次出现于 description[0]，pi-002 首次出现于 description[1]，pi-003 首次出现于 metadata[1]
-    assert result[0] == "pi-001"
-    assert result[1] == "pi-002"
-    assert result[2] == "pi-003"
+    # 按加权分降序：pi-003(3.5) > pi-001(3.0) > pi-002(2.5)
+    assert result[0] == "pi-003"
+    assert result[1] == "pi-001"
+    assert result[2] == "pi-002"
+
+
+@pytest.mark.asyncio
+async def test_combined_results_with_custom_weights():
+    """strategy='combined' 支持自定义权重。"""
+    description_searcher = MagicMock()
+    description_searcher.search = AsyncMock(return_value=["pi-001", "pi-002"])
+
+    metadata_searcher = MagicMock()
+    metadata_searcher.search = AsyncMock(return_value=["pi-002"])
+
+    semantic_searcher = MagicMock()
+    semantic_searcher.search = MagicMock(return_value=["pi-001"])
+
+    # 使用自定义权重：description 最优先
+    router = DocumentSearchRouter(
+        description_searcher=description_searcher,
+        metadata_searcher=metadata_searcher,
+        semantic_searcher=semantic_searcher,
+        strategy="combined",
+        weights={"description": 3.0, "metadata": 1.0, "semantic": 1.0},
+    )
+
+    result = await router.search("test query")
+
+    # pi-001: description(3.0) + semantic(1.0) = 4.0
+    # pi-002: description(3.0) + metadata(1.0) = 4.0
+    # 分数相同，按首次出现顺序
+    assert len(result) == 2
+    assert result == ["pi-001", "pi-002"]
