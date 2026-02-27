@@ -42,7 +42,8 @@ class SemanticSearcher:
             embedding = get_embedding(
                 text,
                 model=self._config.embedding_model,
-                api_key=self._config.openai_api_key,
+                api_key=self._config.embedding_api_key,
+                base_url=self._config.embedding_base_url,
             )
 
             chunk_id = f"{doc_id}#{node_id}"
@@ -61,7 +62,8 @@ class SemanticSearcher:
         query_embedding = get_embedding(
             query,
             model=self._config.embedding_model,
-            api_key=self._config.openai_api_key,
+            api_key=self._config.embedding_api_key,
+            base_url=self._config.embedding_base_url,
         )
 
         results = self.collection.query(

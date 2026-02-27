@@ -17,6 +17,8 @@ def config():
         embedding_model="text-embedding-3-small",
         semantic_top_k=20,
         openai_api_key="test-key",
+        embedding_api_key="test-key",
+        embedding_base_url="https://api.openai.com/v1",
     )
 
 

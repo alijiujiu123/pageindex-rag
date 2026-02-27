@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from pageindex.utils import ChatGPT_API_async, extract_json
+from pageindex.utils import extract_json
+from pageindex_rag.llm import llm_call_async
 
 _PROMPT_TEMPLATE = """\
 You are given a list of documents with their IDs, file names, and descriptions.
@@ -48,10 +49,11 @@ class DescriptionSearcher:
             documents=json.dumps(doc_list, ensure_ascii=False),
         )
 
-        response = await ChatGPT_API_async(
+        response = await llm_call_async(
             self._config.model,
             prompt,
             self._config.openai_api_key,
+            getattr(self._config, "openai_base_url", "https://api.openai.com/v1"),
         )
 
         parsed = extract_json(response)

@@ -59,7 +59,7 @@ async def test_description_search(document_store, config, sample_docs):
     })
 
     with patch(
-        "pageindex_rag.search.description_search.ChatGPT_API_async",
+        "pageindex_rag.search.description_search.llm_call_async",
         new=AsyncMock(return_value=llm_response),
     ), patch(
         "pageindex_rag.search.description_search.extract_json",
@@ -81,7 +81,7 @@ async def test_no_match(document_store, config):
     })
 
     with patch(
-        "pageindex_rag.search.description_search.ChatGPT_API_async",
+        "pageindex_rag.search.description_search.llm_call_async",
         new=AsyncMock(return_value=llm_response),
     ), patch(
         "pageindex_rag.search.description_search.extract_json",
@@ -102,7 +102,7 @@ async def test_multiple_match(document_store, config):
     })
 
     with patch(
-        "pageindex_rag.search.description_search.ChatGPT_API_async",
+        "pageindex_rag.search.description_search.llm_call_async",
         new=AsyncMock(return_value=llm_response),
     ), patch(
         "pageindex_rag.search.description_search.extract_json",

@@ -36,7 +36,8 @@ SAMPLE_TREE = {
 def config():
     return SimpleNamespace(
         model="gpt-4o-2024-11-20",
-        openai_api_key="test-api-key"
+        openai_api_key="test-api-key",
+        openai_base_url="https://api.openai.com/v1",
     )
 
 
@@ -53,7 +54,7 @@ async def test_tree_search_basic(searcher):
         "node_list": ["0001"]
     })
 
-    with patch("pageindex_rag.retrieval.tree_search.ChatGPT_API_async", new=AsyncMock(return_value=mock_response)):
+    with patch("pageindex_rag.retrieval.tree_search.llm_call_async", new=AsyncMock(return_value=mock_response)):
         result = await searcher.search(
             query="What are the financial highlights?",
             tree_structure=SAMPLE_TREE
@@ -77,7 +78,7 @@ async def test_with_preference(searcher):
     expert_knowledge = "Focus on revenue and profit sections"
     preference = "Look for quantitative data"
 
-    with patch("pageindex_rag.retrieval.tree_search.ChatGPT_API_async", new=AsyncMock(return_value=mock_response)) as mock_llm:
+    with patch("pageindex_rag.retrieval.tree_search.llm_call_async", new=AsyncMock(return_value=mock_response)) as mock_llm:
         result = await searcher.search(
             query="What is the revenue?",
             tree_structure=SAMPLE_TREE,
@@ -99,7 +100,7 @@ async def test_json_parse_error(searcher):
     """LLM 返回无效 JSON，返回 {"thinking": "", "node_list": []} 不抛异常"""
     invalid_response = "This is not valid JSON at all!!!"
 
-    with patch("pageindex_rag.retrieval.tree_search.ChatGPT_API_async", new=AsyncMock(return_value=invalid_response)):
+    with patch("pageindex_rag.retrieval.tree_search.llm_call_async", new=AsyncMock(return_value=invalid_response)):
         with patch("pageindex_rag.retrieval.tree_search.extract_json", side_effect=Exception("JSON parse failed")):
             result = await searcher.search(
                 query="What is the revenue?",
@@ -117,7 +118,7 @@ async def test_empty_result(searcher):
         "node_list": []
     })
 
-    with patch("pageindex_rag.retrieval.tree_search.ChatGPT_API_async", new=AsyncMock(return_value=mock_response)):
+    with patch("pageindex_rag.retrieval.tree_search.llm_call_async", new=AsyncMock(return_value=mock_response)):
         result = await searcher.search(
             query="What is the weather today?",
             tree_structure=SAMPLE_TREE

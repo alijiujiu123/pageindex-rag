@@ -2,7 +2,7 @@
 
 import asyncio
 from pageindex_rag.config import get_config
-from pageindex.utils import ChatGPT_API
+from pageindex_rag.llm import llm_call
 
 
 class AnswerEquivalenceJudge:
@@ -34,10 +34,11 @@ Predicted Answer: {predicted}
 
 Respond with exactly one word: YES if equivalent, NO if not equivalent."""
 
-        response = ChatGPT_API(
+        response = llm_call(
             model=self.config.model,
             prompt=prompt,
             api_key=self.config.openai_api_key,
+            base_url=getattr(self.config, "openai_base_url", "https://api.openai.com/v1"),
         )
         return response.strip().upper().startswith("YES")
 

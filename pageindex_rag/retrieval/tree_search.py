@@ -4,7 +4,8 @@ import json
 import logging
 from types import SimpleNamespace
 
-from pageindex.utils import ChatGPT_API_async, extract_json
+from pageindex.utils import extract_json
+from pageindex_rag.llm import llm_call_async
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +90,11 @@ Reply in JSON format: {{"thinking": "your reasoning process...", "node_list": ["
             prompt += f"\nExpert Knowledge of relevant sections: {combined}"
 
         try:
-            response = await ChatGPT_API_async(
+            response = await llm_call_async(
                 self.config.model,
                 prompt,
                 self.config.openai_api_key,
+                self.config.openai_base_url,
             )
             parsed = extract_json(response)
             if not parsed or "node_list" not in parsed:

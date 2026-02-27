@@ -64,7 +64,7 @@ def test_load_financebench():
 
 def test_answer_equivalence_judge():
     """测试 AnswerEquivalenceJudge.judge() 返回正确布尔值（mock ChatGPT_API）。"""
-    with patch("pageindex_rag.benchmark.evaluator.ChatGPT_API") as mock_api:
+    with patch("pageindex_rag.benchmark.evaluator.llm_call") as mock_api:
         from pageindex_rag.benchmark.evaluator import AnswerEquivalenceJudge
 
         config = MagicMock()
