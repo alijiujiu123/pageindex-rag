@@ -18,6 +18,8 @@ SAMPLE_TREE = {
     ]
 }
 
+SAMPLE_MD_CONTENT = "# Test Document\n\n## Chapter 1\n\nSome content here.\n"
+
 
 @pytest.fixture
 def mock_document_store():
@@ -34,14 +36,56 @@ def mock_semantic_searcher():
 
 
 @pytest.mark.asyncio
-async def test_ingest_pdf(mock_document_store, mock_semantic_searcher):
-    """测试 PDF 文档入库流程"""
+async def test_ingest_pdf_uses_markitdown_not_page_index_main(mock_document_store, mock_semantic_searcher):
+    """ingest_pdf 应使用 markitdown 转换，不再调用 page_index_main"""
     from pageindex_rag.ingestion.ingest import DocumentIngestion
 
-    with patch("pageindex_rag.ingestion.ingest.page_index_main") as mock_page_index, \
+    mock_markitdown_result = MagicMock()
+    mock_markitdown_result.text_content = SAMPLE_MD_CONTENT
+
+    with patch("pageindex_rag.ingestion.ingest.MarkItDown") as mock_md_class, \
+         patch("pageindex_rag.ingestion.ingest.md_to_tree", new_callable=AsyncMock) as mock_md_tree, \
+         patch("pageindex_rag.ingestion.ingest.generate_doc_description") as mock_gen_desc, \
+         patch("pageindex_rag.ingestion.ingest.page_index_main") as mock_page_index:
+
+        mock_md_instance = MagicMock()
+        mock_md_instance.convert.return_value = mock_markitdown_result
+        mock_md_class.return_value = mock_md_instance
+        mock_md_tree.return_value = SAMPLE_TREE
+        mock_gen_desc.return_value = "这是一份测试PDF文档的描述。"
+
+        ingestion = DocumentIngestion(
+            document_store=mock_document_store,
+            semantic_searcher=mock_semantic_searcher
+        )
+
+        doc_id = await ingestion.ingest_pdf("/path/to/test.pdf")
+
+        # page_index_main 不应被调用
+        mock_page_index.assert_not_called()
+        # MarkItDown 应被调用并转换 PDF
+        mock_md_instance.convert.assert_called_once_with("/path/to/test.pdf")
+        # md_to_tree 应被调用（传入临时文件路径）
+        mock_md_tree.assert_called_once()
+        assert doc_id == "pi-test-550e8400"
+
+
+@pytest.mark.asyncio
+async def test_ingest_pdf_generates_description(mock_document_store, mock_semantic_searcher):
+    """ingest_pdf 无 doc_description 时应调用 generate_doc_description"""
+    from pageindex_rag.ingestion.ingest import DocumentIngestion
+
+    mock_markitdown_result = MagicMock()
+    mock_markitdown_result.text_content = SAMPLE_MD_CONTENT
+
+    with patch("pageindex_rag.ingestion.ingest.MarkItDown") as mock_md_class, \
+         patch("pageindex_rag.ingestion.ingest.md_to_tree", new_callable=AsyncMock) as mock_md_tree, \
          patch("pageindex_rag.ingestion.ingest.generate_doc_description") as mock_gen_desc:
 
-        mock_page_index.return_value = SAMPLE_TREE
+        mock_md_instance = MagicMock()
+        mock_md_instance.convert.return_value = mock_markitdown_result
+        mock_md_class.return_value = mock_md_instance
+        mock_md_tree.return_value = SAMPLE_TREE
         mock_gen_desc.return_value = "这是一份测试PDF文档的描述。"
 
         ingestion = DocumentIngestion(
@@ -52,7 +96,6 @@ async def test_ingest_pdf(mock_document_store, mock_semantic_searcher):
         doc_id = await ingestion.ingest_pdf("/path/to/test.pdf")
 
         assert doc_id == "pi-test-550e8400"
-        mock_page_index.assert_called_once_with("/path/to/test.pdf")
         mock_gen_desc.assert_called_once()
         mock_document_store.create.assert_called_once_with(
             "/path/to/test.pdf",
@@ -107,10 +150,17 @@ async def test_ingest_with_metadata(mock_document_store, mock_semantic_searcher)
         "filing_type": "10-K"
     }
 
-    with patch("pageindex_rag.ingestion.ingest.page_index_main") as mock_page_index, \
+    mock_markitdown_result = MagicMock()
+    mock_markitdown_result.text_content = SAMPLE_MD_CONTENT
+
+    with patch("pageindex_rag.ingestion.ingest.MarkItDown") as mock_md_class, \
+         patch("pageindex_rag.ingestion.ingest.md_to_tree", new_callable=AsyncMock) as mock_md_tree, \
          patch("pageindex_rag.ingestion.ingest.generate_doc_description") as mock_gen_desc:
 
-        mock_page_index.return_value = SAMPLE_TREE
+        mock_md_instance = MagicMock()
+        mock_md_instance.convert.return_value = mock_markitdown_result
+        mock_md_class.return_value = mock_md_instance
+        mock_md_tree.return_value = SAMPLE_TREE
 
         ingestion = DocumentIngestion(
             document_store=mock_document_store,
@@ -120,7 +170,6 @@ async def test_ingest_with_metadata(mock_document_store, mock_semantic_searcher)
         doc_id = await ingestion.ingest_pdf("/path/to/test.pdf", metadata=full_metadata)
 
         assert doc_id == "pi-test-550e8400"
-        # 不应该调用 generate_doc_description
         mock_gen_desc.assert_not_called()
         mock_document_store.create.assert_called_once_with(
             "/path/to/test.pdf",

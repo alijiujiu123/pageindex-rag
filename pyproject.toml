@@ -27,6 +27,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     # Utilities
     "httpx>=0.27",
+    # PDF performance optimization
+    "markitdown[pdf]>=0.1.0",
 ]
 
 [project.optional-dependencies]
