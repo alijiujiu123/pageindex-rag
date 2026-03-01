@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, call
 
 
 SAMPLE_TREE = {
@@ -17,6 +17,8 @@ SAMPLE_TREE = {
         }
     ]
 }
+
+SAMPLE_MD_CONTENT = "# Test Document\n\n## Chapter 1\n\nSome content here.\n"
 
 
 @pytest.fixture
