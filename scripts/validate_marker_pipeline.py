@@ -1,24 +1,20 @@
 """
-marker 端到端验证脚本 (Issue #42)
+marker JSON 路径端到端验证脚本 (Issue #42)
 
-验证流程：
-    PDF → marker(Modal) → Markdown → 提取标题层级 → 与黄金标准树结构对比
+验证流程（无 LLM 调用）：
+    PDF → marker(Modal, output_format=json) → marker_json → 适配转换 → tree.json → 对比参考树
 
-说明：
-    本脚本只验证 PDF→MD 这一步的质量，不调用 LLM/md_to_tree()。
-    通过对比 Markdown 标题（#/##/###）与黄金标准 JSON 中的节点 title，
-    判断 marker 输出的结构是否完整、可供后续 md_to_tree() 使用。
+两种运行模式：
 
-用法：
-    # 方式 1：使用 Modal 服务（需先部署）
+  阶段 A（全流程，需 Modal 服务）：
     MARKER_MODAL_URL=https://xxx.modal.run \\
         python scripts/validate_marker_pipeline.py \\
         --pdf tests/fixtures/3M_2018_10K.pdf \\
         --reference tests/fixtures/3M_2018_10K_tree.json
 
-    # 方式 2：使用本地已有的 Markdown 文件（跳过 Modal 步骤）
+  阶段 B（跳过 Modal，用已有 marker json 文件）：
     python scripts/validate_marker_pipeline.py \\
-        --md output/marker_3M_2018_10K.md \\
+        --marker-json output/marker_raw_3M_2018_10K.json \\
         --reference tests/fixtures/3M_2018_10K_tree.json
 """
 
@@ -34,15 +30,26 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts.marker_json_to_tree import marker_json_to_pageindex_tree
 
-# ── 步骤 1：PDF → Markdown（via Modal）───────────────────────────────────────
 
-def convert_pdf_via_modal(modal_url: str, pdf_path: Path) -> tuple[str, dict]:
+# ── 步骤 1：PDF → marker JSON（via Modal）─────────────────────────────────────
+
+def convert_pdf_to_marker_json(modal_url: str, pdf_path: Path) -> tuple[dict, dict]:
+    """
+    上传 PDF 到 Modal marker 服务，获取 marker JSON 输出。
+
+    Returns:
+        (marker_json, stats)
+    """
     import urllib.error
     import urllib.request
 
     pdf_b64 = base64.b64encode(pdf_path.read_bytes()).decode()
-    payload = json.dumps({"pdf_base64": pdf_b64, "output_format": "markdown"}).encode()
+    payload = json.dumps({
+        "pdf_base64": pdf_b64,
+        "output_format": "json",
+    }).encode()
 
     url = modal_url.rstrip("/") + "/convert"
     req = urllib.request.Request(
@@ -56,8 +63,11 @@ def convert_pdf_via_modal(modal_url: str, pdf_path: Path) -> tuple[str, dict]:
             result = json.loads(resp.read())
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"HTTP {e.code}: {e.read().decode()}") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"连接失败: {e.reason}") from e
 
     elapsed = round(time.time() - start, 2)
+
     if not result.get("success"):
         raise RuntimeError(f"服务返回错误: {result.get('error')}")
 
@@ -65,30 +75,11 @@ def convert_pdf_via_modal(modal_url: str, pdf_path: Path) -> tuple[str, dict]:
         "page_count": result.get("page_count", 0),
         "server_elapsed": result.get("elapsed_seconds", 0),
         "total_elapsed": elapsed,
-        "md_chars": len(result.get("markdown", "")),
     }
-    return result["markdown"], stats
+    return result["marker_json"], stats
 
 
-# ── 步骤 2：从 Markdown 提取标题层级（纯文本，无 LLM）─────────────────────────
-
-def extract_md_headings(markdown: str) -> list[dict]:
-    """
-    从 Markdown 提取所有标题，返回 [{"level": 1, "title": "..."}]。
-    level 1 = #, level 2 = ##, level 3 = ### ...
-    """
-    headings = []
-    for line in markdown.splitlines():
-        m = re.match(r"^(#{1,6})\s+(.+)", line)
-        if m:
-            headings.append({
-                "level": len(m.group(1)),
-                "title": m.group(2).strip(),
-            })
-    return headings
-
-
-# ── 步骤 3：从黄金标准 JSON 提取节点标题 ─────────────────────────────────────
+# ── 步骤 2：提取树节点标题（递归）──────────────────────────────────────────────
 
 def extract_tree_titles(nodes: list, depth: int = 0) -> list[dict]:
     """递归提取树结构中所有节点标题。"""
@@ -99,57 +90,52 @@ def extract_tree_titles(nodes: list, depth: int = 0) -> list[dict]:
     return result
 
 
-# ── 步骤 4：对比分析 ──────────────────────────────────────────────────────────
+# ── 步骤 3：对比分析 ───────────────────────────────────────────────────────────
 
 def normalize(text: str) -> str:
-    """标准化标题：小写、去多余空格。"""
     return re.sub(r"\s+", " ", text.lower().strip())
 
 
-def titles_match(md_title: str, ref_title: str) -> bool:
-    """模糊匹配：任意一方包含另一方（忽略大小写）。"""
-    a, b = normalize(md_title), normalize(ref_title)
-    return a in b or b in a
+def titles_match(a: str, b: str) -> bool:
+    na, nb = normalize(a), normalize(b)
+    return na in nb or nb in na
 
 
-def compare(md_headings: list[dict], ref_titles: list[dict]) -> dict:
+def compare_trees(generated: list[dict], reference: list[dict]) -> dict:
     """
-    对比 MD 标题与参考树节点 titles。
+    对比生成树与参考树的标题覆盖率。
 
-    - heading_counts：各级标题数量
-    - ref_title_coverage：参考树中有多少 title 能在 MD 标题里找到匹配
-    - unmatched_ref_titles：未匹配的参考节点标题（可能是 marker 漏了）
+    Returns:
+        {
+            "generated_total": int,
+            "reference_total": int,
+            "coverage_pct": float,
+            "matched_count": int,
+            "unmatched_ref_titles": [str],
+        }
     """
-    md_title_list = [h["title"] for h in md_headings]
-    ref_title_list = [t["title"] for t in ref_titles]
+    gen_titles = [n["title"] for n in generated]
+    ref_titles = [n["title"] for n in reference]
 
     matched, unmatched = [], []
-    for rt in ref_title_list:
-        if any(titles_match(mt, rt) for mt in md_title_list):
+    for rt in ref_titles:
+        if any(titles_match(gt, rt) for gt in gen_titles):
             matched.append(rt)
         else:
             unmatched.append(rt)
 
-    coverage = round(len(matched) / max(len(ref_title_list), 1) * 100, 1)
-
-    heading_counts = {}
-    for h in md_headings:
-        lv = h["level"]
-        heading_counts[lv] = heading_counts.get(lv, 0) + 1
+    coverage = round(len(matched) / max(len(ref_titles), 1) * 100, 1)
 
     return {
-        "md_total_headings": len(md_headings),
-        "ref_total_nodes": len(ref_title_list),
-        "heading_level_distribution": heading_counts,
-        "ref_title_coverage": f"{coverage}%",
+        "generated_total": len(gen_titles),
+        "reference_total": len(ref_titles),
+        "coverage_pct": coverage,
         "matched_count": len(matched),
-        "unmatched_count": len(unmatched),
-        "matched_titles": matched,
         "unmatched_ref_titles": unmatched,
     }
 
 
-# ── 主流程 ────────────────────────────────────────────────────────────────────
+# ── 辅助 ──────────────────────────────────────────────────────────────────────
 
 def load_env():
     env_path = PROJECT_ROOT / ".env"
@@ -161,19 +147,29 @@ def load_env():
                 os.environ.setdefault(key.strip(), val.strip())
 
 
+def print_tree_titles(structure: list, indent: int = 0):
+    """打印树结构标题供肉眼审查。"""
+    for node in structure:
+        print("  " * indent + f"· {node['title']}")
+        if node.get("nodes"):
+            print_tree_titles(node["nodes"], indent + 1)
+
+
+# ── 主流程 ────────────────────────────────────────────────────────────────────
+
 def main():
     load_env()
 
     parser = argparse.ArgumentParser(
-        description="验证 marker PDF→MD 转换质量（纯结构对比，不调用 LLM）"
+        description="验证 marker JSON 路径 PDF→tree.json 转换质量（无 LLM 调用）"
     )
     src = parser.add_mutually_exclusive_group(required=True)
-    src.add_argument("--pdf", help="源 PDF 文件路径（使用 Modal 转换）")
-    src.add_argument("--md", help="已有 Markdown 文件路径（跳过 Modal 步骤）")
+    src.add_argument("--pdf", help="源 PDF 文件路径（使用 Modal marker json 模式）")
+    src.add_argument("--marker-json", help="已有 marker JSON 文件路径（跳过 Modal 步骤）")
 
     parser.add_argument(
         "--reference", required=True,
-        help="黄金标准树结构 JSON（如 tests/fixtures/3M_2018_10K_tree.json）"
+        help="参考树结构 JSON（如 tests/fixtures/3M_2018_10K_tree.json）"
     )
     parser.add_argument(
         "--url",
@@ -182,17 +178,21 @@ def main():
     )
     args = parser.parse_args()
 
-    # 加载黄金标准
+    # 加载参考树
     ref_path = Path(args.reference)
     if not ref_path.exists():
         print(f"❌ 参考文件不存在: {ref_path}", file=sys.stderr)
         sys.exit(1)
     with open(ref_path, encoding="utf-8") as f:
         ref_data = json.load(f)
-    reference_tree = ref_data.get("structure", ref_data)
-    ref_titles = extract_tree_titles(reference_tree)
+    ref_structure = ref_data.get("structure", ref_data)
+    ref_titles = extract_tree_titles(ref_structure)
+    doc_name = ref_data.get("doc_name", ref_path.stem)
 
-    # 步骤 1：获取 Markdown
+    output_dir = PROJECT_ROOT / "output"
+    output_dir.mkdir(exist_ok=True)
+
+    # ── 阶段 A：PDF → marker JSON（via Modal）──────────────────────────────
     stats = {}
     if args.pdf:
         if not args.url:
@@ -203,72 +203,78 @@ def main():
             print(f"❌ PDF 文件不存在: {pdf_path}", file=sys.stderr)
             sys.exit(1)
 
-        print(f"\n📄 步骤 1/3：PDF → Markdown（via Modal marker）")
+        print(f"\n📄 阶段 A-1：PDF → marker JSON（via Modal）")
         print(f"   文件：{pdf_path.name}（{pdf_path.stat().st_size / 1024:.0f} KB）")
         print(f"   URL：{args.url}")
         print("   ⏳ 转换中（冷启动约 30-60s）...")
 
         try:
-            markdown, stats = convert_pdf_via_modal(args.url, pdf_path)
+            marker_json, stats = convert_pdf_to_marker_json(args.url, pdf_path)
         except RuntimeError as e:
             print(f"   ❌ 转换失败: {e}", file=sys.stderr)
             sys.exit(1)
 
-        # 保存 Markdown
-        output_dir = PROJECT_ROOT / "output"
-        output_dir.mkdir(exist_ok=True)
-        md_file = output_dir / f"marker_{pdf_path.stem}.md"
-        md_file.write_text(markdown, encoding="utf-8")
+        # 保存原始 marker JSON
+        raw_file = output_dir / f"marker_raw_{pdf_path.stem}.json"
+        with open(raw_file, "w", encoding="utf-8") as f:
+            json.dump(marker_json, f, ensure_ascii=False, indent=2)
 
         print(f"   ✅ 转换成功")
         print(f"      页数：{stats['page_count']}，"
               f"服务端耗时：{stats['server_elapsed']}s，总耗时：{stats['total_elapsed']}s")
-        print(f"      Markdown：{stats['md_chars']:,} 字符 → {md_file}")
-        doc_name = pdf_path.stem
+        print(f"      marker JSON 保存至：{raw_file}")
+        stem = pdf_path.stem
 
     else:
-        md_path = Path(args.md)
-        if not md_path.exists():
-            print(f"❌ Markdown 文件不存在: {md_path}", file=sys.stderr)
+        # ── 阶段 B：加载已有 marker JSON ───────────────────────────────────
+        mj_path = Path(args.marker_json)
+        if not mj_path.exists():
+            print(f"❌ marker JSON 文件不存在: {mj_path}", file=sys.stderr)
             sys.exit(1)
-        markdown = md_path.read_text(encoding="utf-8")
-        doc_name = md_path.stem.replace("marker_", "")
-        print(f"\n📝 步骤 1/3：加载 Markdown 文件")
-        print(f"   {md_path}（{len(markdown):,} 字符）")
+        with open(mj_path, encoding="utf-8") as f:
+            marker_json = json.load(f)
+        stem = mj_path.stem.replace("marker_raw_", "")
+        print(f"\n📂 阶段 A（跳过）：加载本地 marker JSON")
+        print(f"   {mj_path}")
 
-    # 步骤 2：提取 MD 标题
-    print(f"\n🔍 步骤 2/3：提取 Markdown 标题层级")
-    md_headings = extract_md_headings(markdown)
-    print(f"   共提取 {len(md_headings)} 个标题")
+    # ── 阶段 A-2：marker JSON → PageIndex tree ──────────────────────────────
+    print(f"\n🔧 阶段 A-2：marker JSON → PageIndex tree（适配转换）")
+    tree = marker_json_to_pageindex_tree(marker_json, doc_name=doc_name)
+    gen_structure = tree["structure"]
 
-    level_dist = {}
-    for h in md_headings:
-        level_dist[h["level"]] = level_dist.get(h["level"], 0) + 1
-    for lv in sorted(level_dist):
-        print(f"   {'#' * lv} ：{level_dist[lv]} 个")
+    # 保存生成的树结构
+    tree_file = output_dir / f"marker_tree_{stem}.json"
+    with open(tree_file, "w", encoding="utf-8") as f:
+        json.dump(tree, f, ensure_ascii=False, indent=2)
 
-    # 步骤 3：对比
-    print(f"\n📊 步骤 3/3：与黄金标准对比")
+    gen_titles = extract_tree_titles(gen_structure)
+    print(f"   ✅ 生成树节点总数：{len(gen_titles)}（顶层：{len(gen_structure)}）")
+    print(f"   tree.json 保存至：{tree_file}")
+
+    # ── 阶段 B：对比报告 ────────────────────────────────────────────────────
+    print(f"\n📊 阶段 B：与参考树对比")
     print(f"   参考树节点总数：{len(ref_titles)}")
-    report = compare(md_headings, ref_titles)
-    coverage = float(report["ref_title_coverage"].rstrip("%"))
 
-    print(f"\n{'='*55}")
-    print(f"  MD 标题总数：{report['md_total_headings']}")
-    print(f"  参考节点总数：{report['ref_total_nodes']}")
-    print(f"  参考标题覆盖率：{report['ref_title_coverage']}  "
-          f"({report['matched_count']}/{report['ref_total_nodes']})")
-    print(f"{'='*55}")
+    report = compare_trees(gen_titles, ref_titles)
+    coverage = report["coverage_pct"]
+
+    print(f"\n{'='*60}")
+    print(f"  生成树节点数：{report['generated_total']}")
+    print(f"  参考树节点数：{report['reference_total']}")
+    print(f"  参考标题覆盖率：{coverage}%  ({report['matched_count']}/{report['reference_total']})")
+    print(f"{'='*60}")
 
     if report["unmatched_ref_titles"]:
-        print(f"\n⚠️  未在 MD 中找到的参考标题（{report['unmatched_count']} 个）：")
+        print(f"\n⚠️  未覆盖的参考标题（{len(report['unmatched_ref_titles'])} 个）：")
         for t in report["unmatched_ref_titles"]:
             print(f"   · {t}")
 
-    # 保存报告
-    output_dir = PROJECT_ROOT / "output"
-    output_dir.mkdir(exist_ok=True)
-    report_file = output_dir / f"marker_validation_{doc_name}.json"
+    # ── 阶段 B（手动审查）：打印生成树标题 ──────────────────────────────────
+    print(f"\n── 生成树标题列表（供肉眼审查）──")
+    print_tree_titles(gen_structure)
+
+    # 保存完整报告
+    report_file = output_dir / f"marker_validation_{stem}.json"
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump({
             "doc_name": doc_name,
@@ -277,13 +283,17 @@ def main():
         }, f, ensure_ascii=False, indent=2)
     print(f"\n📄 完整报告：{report_file}")
 
-    # 质量结论
-    print(f"\n{'✅ PASS' if coverage >= 60 else '⚠️  需人工复核'}  "
-          f"参考标题覆盖率 {coverage}%（阈值 60%）")
-    if coverage >= 60:
-        print("   marker 输出的 Markdown 标题结构完整，可供 md_to_tree() 使用。")
+    # 结论
+    threshold = 60.0
+    passed = coverage >= threshold
+    print(f"\n{'✅ PASS' if passed else '⚠️  WARN'}  "
+          f"参考标题覆盖率 {coverage}%（阈值 {threshold}%）")
+    if passed:
+        print("   marker JSON 路径生成的树结构质量达标，可替代 PageIndex SDK。")
     else:
-        print("   marker 标题提取不足，请检查 output/marker_<name>.md 文件。")
+        print("   覆盖率不足，请检查 marker JSON 输出或调整适配规则。")
+
+    sys.exit(0 if passed else 1)
 
 
 if __name__ == "__main__":
