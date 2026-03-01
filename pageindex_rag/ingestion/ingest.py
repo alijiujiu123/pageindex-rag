@@ -1,6 +1,7 @@
 """Document ingestion module using PageIndex SDK for cloud-based tree generation."""
 
 import asyncio
+import json
 import time
 
 from pageindex import PageIndexClient
@@ -88,7 +89,9 @@ class DocumentIngestion:
 
             status = result.get("status")
             if status == "completed":
-                return result.get("result", [])
+                # PageIndex SDK 返回双重 JSON 编码的字符串列表，需解码
+                raw_list = result.get("result", [])
+                return [json.loads(json.loads(item)) for item in raw_list]
             elif status == "failed":
                 raise RuntimeError(f"PageIndex tree generation failed: {result.get('error', 'Unknown error')}")
 

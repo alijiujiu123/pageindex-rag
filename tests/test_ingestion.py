@@ -1,24 +1,31 @@
+import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
+# PageIndex SDK 实际返回的树结构（解码后）
 SAMPLE_TREE = [
     {
         "title": "Test Document",
         "node_id": "0001",
-        "page_index": 1,
+        "start_index": 1,
+        "end_index": 10,
         "text": "Sample text content...",
         "nodes": [
             {
                 "title": "Chapter 1",
                 "node_id": "0002",
-                "page_index": 1,
+                "start_index": 1,
+                "end_index": 5,
                 "text": "Chapter 1 content...",
                 "nodes": []
             }
         ]
     }
 ]
+
+# PageIndex SDK 实际返回格式：双重 JSON 编码的字符串列表
+SAMPLE_TREE_SDK_FORMAT = [json.dumps(json.dumps(node)) for node in SAMPLE_TREE]
 
 SAMPLE_MD_TREE = {
     "title": "Test Document",
@@ -66,7 +73,7 @@ def mock_pi_client():
     client.submit_document.return_value = {"doc_id": "cloud-doc-123"}
     client.get_tree.return_value = {
         "status": "completed",
-        "result": SAMPLE_TREE
+        "result": SAMPLE_TREE_SDK_FORMAT
     }
     client.delete_document.return_value = None
     return client
@@ -162,7 +169,7 @@ async def test_ingest_pdf_polls_until_completed(mock_config, mock_document_store
     mock_pi_client.get_tree.side_effect = [
         {"status": "processing"},
         {"status": "processing"},
-        {"status": "completed", "result": SAMPLE_TREE}
+        {"status": "completed", "result": SAMPLE_TREE_SDK_FORMAT}
     ]
     mock_pi_client.delete_document.return_value = None
 
