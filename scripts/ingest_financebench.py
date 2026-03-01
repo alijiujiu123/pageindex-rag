@@ -39,15 +39,8 @@ _FINANCEBENCH_PDF_BASE = "https://github.com/PatronusAI/FinanceBench/raw/main/pd
 
 
 def get_pdf_path(doc_name: str, pdf_dir: str) -> str:
-    """获取 PDF 文件路径，如果文件不存在则返回下载 URL。"""
-    pdf_path = os.path.join(pdf_dir, doc_name)
-    if os.path.exists(pdf_path):
-        return pdf_path
-
-    # 尝试从 doc_name 构建下载 URL
-    # FinanceBench 的 doc_name 通常是文件名
-    url = f"{_FINANCEBENCH_PDF_BASE}/{doc_name}"
-    return url
+    """获取 PDF 文件路径。"""
+    return os.path.join(pdf_dir, f"{doc_name}.pdf")
 
 
 async def download_pdf(url: str, dest_path: str) -> bool:
@@ -76,12 +69,13 @@ async def ingest_document(
 ) -> tuple[bool, str]:
     """入库单个文档。返回 (成功与否, 消息)。"""
     doc_name = doc_info["doc_name"]
-    pdf_path = os.path.join(pdf_dir, doc_name)
+    pdf_path = os.path.join(pdf_dir, f"{doc_name}.pdf")
 
     # 检查文件是否存在
     if not os.path.exists(pdf_path):
         if force_download:
-            url = f"{_FINANCEBENCH_PDF_BASE}/{doc_name}"
+            # 优先使用数据集中的 doc_link
+            url = doc_info.get("doc_link") or f"{_FINANCEBENCH_PDF_BASE}/{doc_name}"
             print(f"  下载中: {url}")
             success = await download_pdf(url, pdf_path)
             if not success:

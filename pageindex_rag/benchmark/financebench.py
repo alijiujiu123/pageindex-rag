@@ -24,6 +24,7 @@ class FinanceBenchDataset:
             "fiscal_year": row.get("fiscal_year", ""),
             "filing_type": row.get("filing_type", ""),
             "doc_name": row.get("doc_name", ""),
+            "doc_link": row.get("doc_link", ""),
         }
 
     def get_unique_docs(self) -> list:
@@ -39,5 +40,6 @@ class FinanceBenchDataset:
                     "company": item.get("company", ""),
                     "fiscal_year": item.get("fiscal_year", ""),
                     "filing_type": item.get("filing_type", ""),
+                    "doc_link": item.get("doc_link", ""),
                 })
         return unique

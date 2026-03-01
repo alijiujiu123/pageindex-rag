@@ -47,8 +47,11 @@ def get_config(**overrides) -> SimpleNamespace:
         # Search
         "semantic_top_k": int(os.getenv("SEMANTIC_TOP_K", "20")),
         "max_search_docs": int(os.getenv("MAX_SEARCH_DOCS", "5")),
-        # PageIndex
-        "pageindex_model": os.getenv("PAGEINDEX_MODEL", "gpt-4o-2024-11-20"),
+        # PageIndex（入库时使用，走 CHATGPT_API_KEY 环境变量）
+        "pageindex_model": os.getenv(
+            "PAGEINDEX_MODEL",
+            "deepseek/deepseek-v3.2" if _use_openrouter else "gpt-4o-2024-11-20",
+        ),
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
