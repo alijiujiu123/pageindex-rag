@@ -4,7 +4,7 @@ import json
 import logging
 from types import SimpleNamespace
 
-from pageindex.utils import extract_json
+from pageindex_core.utils import extract_json
 from pageindex_rag.llm import llm_call_async
 
 logger = logging.getLogger(__name__)

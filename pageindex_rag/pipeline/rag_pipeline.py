@@ -42,7 +42,7 @@ class RAGPipeline:
         tree = doc.get("tree_json") or doc.get("tree")
         node_meta_map = {}
         if tree:
-            from pageindex.utils import get_nodes
+            from pageindex_core.utils import get_nodes
 
             node_meta_map = {n.get("node_id"): n for n in get_nodes(tree)}
 

@@ -49,6 +49,7 @@ def get_config(**overrides) -> SimpleNamespace:
         "max_search_docs": int(os.getenv("MAX_SEARCH_DOCS", "5")),
         # PageIndex
         "pageindex_model": os.getenv("PAGEINDEX_MODEL", "gpt-4o-2024-11-20"),
+        "pageindex_api_key": os.getenv("PAGEINDEX_API_KEY", ""),
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)

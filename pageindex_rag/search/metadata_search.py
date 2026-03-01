@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from pageindex.utils import extract_json
+from pageindex_core.utils import extract_json
 from pageindex_rag.llm import llm_call_async
 
 _METADATA_PROMPT_TEMPLATE = """从用户查询中提取文档元数据筛选条件。

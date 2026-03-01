@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from pageindex.utils import extract_json
+from pageindex_core.utils import extract_json
 from pageindex_rag.llm import llm_call_async
 
 _PROMPT_TEMPLATE = """\

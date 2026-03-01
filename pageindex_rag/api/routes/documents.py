@@ -180,7 +180,7 @@ async def search_document_tree(
     # 从树结构中提取节点信息
     nodes = []
     if node_ids:
-        from pageindex.utils import get_nodes
+        from pageindex_core.utils import get_nodes
         all_nodes = get_nodes(tree)
         node_map = {n["node_id"]: n for n in all_nodes}
 

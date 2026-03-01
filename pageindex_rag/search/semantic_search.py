@@ -12,7 +12,7 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 if _BASE_DIR not in sys.path:
     sys.path.insert(0, _BASE_DIR)
 
-from pageindex.utils import get_nodes
+from pageindex_core.utils import get_nodes
 from pageindex_rag.search.embeddings import get_embedding, get_embeddings_batch
 
 _COLLECTION_NAME = "pageindex_nodes"
