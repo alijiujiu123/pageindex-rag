@@ -17,6 +17,8 @@ def config():
         embedding_model="text-embedding-3-small",
         semantic_top_k=20,
         openai_api_key="test-key",
+        embedding_api_key="test-key",
+        embedding_base_url="https://api.openai.com/v1",
     )
 
 
@@ -47,14 +49,15 @@ def sample_tree():
 # ---------------------------------------------------------------------------
 
 def test_index_document(config, sample_tree):
-    """index_document 应将每个节点 embed 并 upsert 到 ChromaDB，id 格式为 {doc_id}#{node_id}。"""
+    """index_document 应批量 embed 所有节点，单次 upsert 到 ChromaDB，id 格式为 {doc_id}#{node_id}。"""
     mock_collection = MagicMock()
 
     with patch("chromadb.PersistentClient") as mock_chroma_client, \
-         patch("pageindex_rag.search.semantic_search.get_embedding") as mock_embed:
+         patch("pageindex_rag.search.semantic_search.get_embeddings_batch") as mock_embed_batch:
 
         mock_chroma_client.return_value.get_or_create_collection.return_value = mock_collection
-        mock_embed.return_value = [0.1, 0.2, 0.3]
+        # 两个节点，返回两个向量
+        mock_embed_batch.return_value = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
         from pageindex_rag.search.semantic_search import SemanticSearcher
         searcher = SemanticSearcher(config)
@@ -62,19 +65,15 @@ def test_index_document(config, sample_tree):
         doc_id = "pi-test-doc-001"
         searcher.index_document(doc_id, sample_tree)
 
-        # 应调用 get_embedding（两个节点各调用一次）
-        assert mock_embed.call_count == 2
+        # 批量 embedding 只应调用一次
+        assert mock_embed_batch.call_count == 1
 
-        # 验证 upsert 被调用两次
-        assert mock_collection.upsert.call_count == 2
+        # upsert 只调用一次（批量写入）
+        assert mock_collection.upsert.call_count == 1
 
         # 验证 id 格式
-        call_args_list = mock_collection.upsert.call_args_list
-        upserted_ids = []
-        for call in call_args_list:
-            ids = call.kwargs.get("ids") or call.args[0]
-            upserted_ids.extend(ids)
-
+        upsert_call = mock_collection.upsert.call_args
+        upserted_ids = upsert_call.kwargs.get("ids") or upsert_call.args[0]
         assert f"{doc_id}#0000" in upserted_ids
         assert f"{doc_id}#0001" in upserted_ids
 

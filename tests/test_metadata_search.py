@@ -28,7 +28,7 @@ async def test_query_to_sql(mock_store, config):
     llm_response = '{"company": "Apple", "fiscal_year": "2023", "filing_type": null}'
 
     with patch(
-        "pageindex_rag.search.metadata_search.ChatGPT_API_async",
+        "pageindex_rag.search.metadata_search.llm_call_async",
         new=AsyncMock(return_value=llm_response),
     ):
         searcher = MetadataSearcher(mock_store, config)
@@ -46,7 +46,7 @@ async def test_sql_injection_prevention(mock_store, config):
     llm_response = f'{{"company": "{injection_str}", "fiscal_year": null, "filing_type": null}}'
 
     with patch(
-        "pageindex_rag.search.metadata_search.ChatGPT_API_async",
+        "pageindex_rag.search.metadata_search.llm_call_async",
         new=AsyncMock(return_value=llm_response),
     ):
         searcher = MetadataSearcher(mock_store, config)
@@ -65,7 +65,7 @@ async def test_end_to_end(mock_store, config):
     ]
 
     with patch(
-        "pageindex_rag.search.metadata_search.ChatGPT_API_async",
+        "pageindex_rag.search.metadata_search.llm_call_async",
         new=AsyncMock(return_value=llm_response),
     ):
         searcher = MetadataSearcher(mock_store, config)

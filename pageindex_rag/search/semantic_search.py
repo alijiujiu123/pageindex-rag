@@ -12,8 +12,8 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 if _BASE_DIR not in sys.path:
     sys.path.insert(0, _BASE_DIR)
 
-from pageindex.utils import get_nodes
-from pageindex_rag.search.embeddings import get_embedding
+from pageindex_core.utils import get_nodes
+from pageindex_rag.search.embeddings import get_embedding, get_embeddings_batch
 
 _COLLECTION_NAME = "pageindex_nodes"
 
@@ -31,27 +31,32 @@ class SemanticSearcher:
     # ------------------------------------------------------------------
 
     def index_document(self, doc_id: str, tree: dict) -> None:
-        """展开树结构中所有节点，为每个节点生成 embedding 并 upsert 到 ChromaDB。"""
+        """展开树结构中所有节点，批量获取 embedding，单次 upsert 到 ChromaDB。"""
         nodes = get_nodes(tree)
-        for node in nodes:
-            node_id = node.get("node_id", "")
-            title = node.get("title", "")
-            summary = node.get("summary", "")
-            text = f"{title} {summary}".strip()
+        if not nodes:
+            return
 
-            embedding = get_embedding(
-                text,
-                model=self._config.embedding_model,
-                api_key=self._config.openai_api_key,
-            )
+        node_ids = [node.get("node_id", "") for node in nodes]
+        texts = [
+            f"{node.get('title', '')} {node.get('summary', '')}".strip()
+            for node in nodes
+        ]
 
-            chunk_id = f"{doc_id}#{node_id}"
-            self.collection.upsert(
-                ids=[chunk_id],
-                embeddings=[embedding],
-                documents=[text],
-                metadatas=[{"doc_id": doc_id, "node_id": node_id}],
-            )
+        # 批量获取 embedding（1次 API 调用代替 N 次串行）
+        embeddings = get_embeddings_batch(
+            texts,
+            model=self._config.embedding_model,
+            api_key=self._config.embedding_api_key,
+            base_url=self._config.embedding_base_url,
+        )
+
+        chunk_ids = [f"{doc_id}#{nid}" for nid in node_ids]
+        self.collection.upsert(
+            ids=chunk_ids,
+            embeddings=embeddings,
+            documents=texts,
+            metadatas=[{"doc_id": doc_id, "node_id": nid} for nid in node_ids],
+        )
 
     def search(self, query: str, top_k: int = None) -> list[str]:
         """语义搜索，返回按 DocScore 降序排列的 doc_id 列表。"""
@@ -61,7 +66,8 @@ class SemanticSearcher:
         query_embedding = get_embedding(
             query,
             model=self._config.embedding_model,
-            api_key=self._config.openai_api_key,
+            api_key=self._config.embedding_api_key,
+            base_url=self._config.embedding_base_url,
         )
 
         results = self.collection.query(

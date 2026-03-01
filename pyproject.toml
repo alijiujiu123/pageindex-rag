@@ -27,6 +27,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     # Utilities
     "httpx>=0.27",
+    # PageIndex SDK for cloud-based tree generation
+    "pageindex>=0.1.0",
 ]
 
 [project.optional-dependencies]
@@ -41,4 +43,4 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.setuptools.packages.find]
-include = ["pageindex_rag*", "pageindex*"]
+include = ["pageindex_rag*", "pageindex_core*"]

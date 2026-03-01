@@ -50,7 +50,7 @@ async def test_single_doc_pipeline(mock_document_store, mock_tree_searcher, mock
     """测试单文档模式的 RAG Pipeline"""
     from pageindex_rag.pipeline.rag_pipeline import RAGPipeline
 
-    with patch("pageindex_rag.pipeline.answer_generator.ChatGPT_API_async", new_callable=AsyncMock) as mock_llm:
+    with patch("pageindex_rag.pipeline.answer_generator.llm_call_async", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = "这是基于文档内容生成的答案。"
 
         pipeline = RAGPipeline(
@@ -94,7 +94,7 @@ async def test_multi_doc_pipeline(mock_document_store, mock_tree_searcher, mock_
 
     mock_document_store.get.side_effect = get_doc
 
-    with patch("pageindex_rag.pipeline.answer_generator.ChatGPT_API_async", new_callable=AsyncMock) as mock_llm:
+    with patch("pageindex_rag.pipeline.answer_generator.llm_call_async", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = "基于多个文档生成的综合答案。"
 
         pipeline = RAGPipeline(
@@ -163,7 +163,7 @@ async def test_single_doc_pipeline_handles_tree_search_dict_and_extractor_map():
     node_extractor = MagicMock()
     node_extractor.extract.return_value = {"0001": "text-1", "0002": "text-2"}
 
-    with patch("pageindex_rag.pipeline.answer_generator.ChatGPT_API_async", new_callable=AsyncMock) as mock_llm:
+    with patch("pageindex_rag.pipeline.answer_generator.llm_call_async", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = "answer"
         pipeline = RAGPipeline(document_store, tree_searcher, node_extractor)
         result = await pipeline.query("Q", doc_id="pi-test-123")
@@ -199,7 +199,7 @@ async def test_multi_doc_pipeline_handles_router_doc_id_list():
     search_router = MagicMock()
     search_router.search = AsyncMock(return_value=["pi-test-123", "pi-test-456"])
 
-    with patch("pageindex_rag.pipeline.answer_generator.ChatGPT_API_async", new_callable=AsyncMock) as mock_llm:
+    with patch("pageindex_rag.pipeline.answer_generator.llm_call_async", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = "answer"
         pipeline = RAGPipeline(
             document_store=document_store,

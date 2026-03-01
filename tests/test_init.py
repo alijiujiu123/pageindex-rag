@@ -30,7 +30,7 @@ def test_config_override():
 
 
 def test_pageindex_source_available():
-    from pageindex.utils import extract_json, get_nodes, structure_to_list
+    from pageindex_core.utils import extract_json, get_nodes, structure_to_list
     assert callable(extract_json)
     assert callable(get_nodes)
     assert callable(structure_to_list)

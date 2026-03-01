@@ -1,5 +1,5 @@
 from pageindex_rag.config import get_config
-from pageindex.utils import ChatGPT_API_async
+from pageindex_rag.llm import llm_call_async
 
 
 class AnswerGenerator:
@@ -70,5 +70,6 @@ Please provide your answer:"""
 
         model = getattr(self.config, "model", "gpt-4o-mini")
         api_key = getattr(self.config, "openai_api_key", "")
-        answer = await ChatGPT_API_async(model, prompt, api_key)
+        base_url = getattr(self.config, "openai_base_url", "https://api.openai.com/v1")
+        answer = await llm_call_async(model, prompt, api_key, base_url)
         return answer

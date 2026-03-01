@@ -1,6 +1,6 @@
 """NodeContentExtractor: doc_id + node_id[] -> text[]"""
 
-from pageindex.utils import get_nodes, get_page_tokens
+from pageindex_core.utils import get_nodes, get_page_tokens
 
 
 class NodeContentExtractor:

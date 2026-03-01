@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from pageindex.utils import ChatGPT_API_async, extract_json
+from pageindex_core.utils import extract_json
+from pageindex_rag.llm import llm_call_async
 
 _METADATA_PROMPT_TEMPLATE = """从用户查询中提取文档元数据筛选条件。
 可用字段: company (str), fiscal_year (str), filing_type (str)
@@ -24,8 +25,9 @@ class MetadataSearcher:
         """Extract metadata filters from query via LLM and return matching doc_id list."""
         prompt = _METADATA_PROMPT_TEMPLATE.format(query=query)
         try:
-            raw = await ChatGPT_API_async(
-                self._config.model, prompt, self._config.openai_api_key
+            raw = await llm_call_async(
+                self._config.model, prompt, self._config.openai_api_key,
+                getattr(self._config, "openai_base_url", "https://api.openai.com/v1"),
             )
             filters_raw: dict = extract_json(raw)
         except Exception:
