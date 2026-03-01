@@ -16,3 +16,6 @@ results/
 
 # uv lock file
 uv.lock
+
+# marker 转换输出结果
+output/
