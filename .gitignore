@@ -10,3 +10,9 @@ logs/
 results/
 .pytest_cache/
 .worktrees/
+
+# IDE
+.idea/
+
+# uv lock file
+uv.lock
